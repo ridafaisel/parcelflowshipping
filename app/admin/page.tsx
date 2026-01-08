@@ -38,7 +38,7 @@ export default function AdminDashboard() {
   ].filter(tab => user?.permissions?.includes(tab.permission));
 
   // Form handlers
-  const handleCreatePackage = (e) => {
+  const handleCreatePackage = (e:any) => {
     e.preventDefault();
     const newPkg = {
       id: packages.length + 1,
@@ -54,7 +54,7 @@ export default function AdminDashboard() {
     setNewPackage({ trackingNumber: "", sender: "", receiver: "", weight: "", dimensions: "", currentLocationId: 1 });
   };
 
-  const handleUpdateStatus = (e) => {
+  const handleUpdateStatus = (e:any) => {
     e.preventDefault();
     const updatedPackages = packages.map(pkg => 
       pkg.id === parseInt(updateStatus.packageId) 
@@ -393,7 +393,7 @@ export default function AdminDashboard() {
             </div>
             <h3 className="text-lg font-medium text-gray-800 mb-2">Permission Required</h3>
             <p className="text-gray-600">
-              You don't have the <span className="font-medium">{activeTab}</span> permission.
+              You do not have the <span className="font-medium">{activeTab}</span> permission.
             </p>
           </div>
         )}

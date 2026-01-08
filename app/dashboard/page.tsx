@@ -2,7 +2,6 @@
 
 import RequireAuth from "../components/RequireAuth";
 import { useAuth } from "../context/AuthContext";
-import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 export default function DashboardPage() {
   const { user, logout } = useAuth();
@@ -26,7 +25,7 @@ function HandleLogout() {
           <p>No actions available.</p>
         ) : (
           <ul>
-            {actions.map((a) => (
+            {actions.map((a:any) => (
               <li key={a}>{a}</li>
             ))}
           </ul>
