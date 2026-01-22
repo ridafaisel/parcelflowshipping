@@ -1,446 +1,713 @@
 "use client";
 
 import { useAuth } from "../context/AuthContext";
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
+import AdminHeader from "../components/admin/AdminHeader";
+import LoginPrompt from "../components/admin/LoginPrompt";
+import LoadingDashboard from "../components/admin/LoadingDashboard";
+import ErrorAlert from "../components/admin/ErrorAlert";
+import TabsNav from "../components/admin/TabsNav";
+import CreatePackageForm from "../components/admin/CreatePackageForm";
+import UpdateStatusForm from "../components/admin/UpdateStatusForm";
+import PackagesTable from "../components/admin/PackagesTable";
+import QuickStats from "../components/admin/QuickStats";
+import DebugInfo from "../components/admin/DebugInfo";
+import ManageLocationsTab from "../components/admin/ManageLocationsTab";
+import { Center, Customer, Location, Package } from "../components/admin/types";
 
 export default function AdminDashboard() {
-  const { user } = useAuth();
-  const [activeTab, setActiveTab] = useState("CREATE_PACKAGE");
-
-  // Mock data for packages
-  const [packages, setPackages] = useState([
-    { id: 1, trackingNumber: "PKG-123", status: "CREATED", sender: "John Doe", receiver: "Jane Smith" },
-    { id: 2, trackingNumber: "PKG-456", status: "IN_TRANSIT", sender: "Acme Corp", receiver: "Globex Inc" },
-    { id: 3, trackingNumber: "PKG-789", status: "DELIVERED", sender: "Bob Builder", receiver: "Wendy Worker" },
-  ]);
+  const { user, logout } = useAuth();
+  const router = useRouter();
+  const [activeTab, setActiveTab] = useState("VIEW_PACKAGES");
+  const [packages, setPackages] = useState<Package[]>([]);
+  const [customers, setCustomers] = useState<Customer[]>([]);
+  const [locations, setLocations] = useState<Location[]>([]);
+  const [centers, setCenters] = useState<Center[]>([]);
+  const [loading, setLoading] = useState({
+    packages: true,
+    customers: true,
+    locations: true,
+    centers: true
+  });
+  const [error, setError] = useState<string | null>(null);
+  const [showLoginPrompt, setShowLoginPrompt] = useState(false);
 
   // Form states
   const [newPackage, setNewPackage] = useState({
-    trackingNumber: "",
-    sender: "",
-    receiver: "",
     weight: "",
     dimensions: "",
-    currentLocationId: 1
+    senderId: "",
+    receiverId: "",
+    currentLocationId: "",
+    transportationId: ""
   });
 
   const [updateStatus, setUpdateStatus] = useState({
     packageId: "",
     status: "IN_TRANSIT",
-    locationId: 1
+    locationId: ""
   });
+
+  const [newLocation, setNewLocation] = useState({
+    name: "",
+    address: "",
+    city: "",
+    centerId: ""
+  });
+
+  const [newCenter, setNewCenter] = useState({
+    name: "",
+    city: "",
+    type: ""
+  });
+
+  const [locationActionLoading, setLocationActionLoading] = useState<{
+    create: boolean;
+    deletingId: number | null;
+  }>({
+    create: false,
+    deletingId: null
+  });
+
+  const [centerActionLoading, setCenterActionLoading] = useState<{
+    create: boolean;
+  }>({
+    create: false
+  });
+
+  const handleNewPackageChange = (updates: Partial<typeof newPackage>) => {
+    setNewPackage((prev) => ({ ...prev, ...updates }));
+  };
+
+  const handleUpdateStatusChange = (updates: Partial<typeof updateStatus>) => {
+    setUpdateStatus((prev) => ({ ...prev, ...updates }));
+  };
+
+  const handleNewLocationChange = (updates: Partial<typeof newLocation>) => {
+    setNewLocation((prev) => ({ ...prev, ...updates }));
+  };
+
+  const handleNewCenterChange = (updates: Partial<typeof newCenter>) => {
+    setNewCenter((prev) => ({ ...prev, ...updates }));
+  };
+
+  const handleSelectPackage = (pkg: Package) => {
+    setUpdateStatus({
+      packageId: pkg.id.toString(),
+      status: pkg.status,
+      locationId: pkg.currentLocation.id.toString()
+    });
+    setActiveTab("UPDATE_PACKAGE_STATUS");
+  };
+
+  // Get token from localStorage
+  const getToken = () => {
+    const token = localStorage.getItem("token");
+    if (!token) {
+      setShowLoginPrompt(true);
+      setError("Please login to access the dashboard");
+      return null;
+    }
+    return token;
+  };
+
+  // Fetch data on component mount
+  useEffect(() => {
+    const token = getToken();
+    if (token) {
+      fetchData();
+    }
+  }, []);
+
+  // Fetch data when tab changes to VIEW_PACKAGES
+  useEffect(() => {
+    const token = getToken();
+    if (token && activeTab === "VIEW_PACKAGES") {
+      fetchPackages();
+    }
+  }, [activeTab]);
+
+  useEffect(() => {
+    const token = getToken();
+    if (token && activeTab === "MANAGE_LOCATIONS") {
+      fetchCenters();
+    }
+  }, [activeTab]);
+
+  async function fetchData() {
+    const token = getToken();
+    if (!token) return;
+    
+    await Promise.all([
+      fetchPackages(),
+      fetchCustomers(),
+      fetchLocations(),
+      fetchCenters()
+    ]);
+  }
+
+  async function fetchPackages() {
+    const token = getToken();
+    if (!token) return;
+    
+    try {
+      setLoading(prev => ({ ...prev, packages: true }));
+      setError(null);
+      
+      console.log("Fetching packages...");
+      const response = await fetch("http://localhost:4000/packages", {
+        headers: { 
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json"
+        }
+      });
+      
+      console.log("Packages response status:", response.status);
+      
+      if (response.status === 401 || response.status === 403) {
+        const errorData = await response.json().catch(() => ({ error: "Authentication failed" }));
+        setError(`Authentication error: ${errorData.error}`);
+        
+        if (response.status === 401) {
+          // Token expired or invalid
+          localStorage.removeItem("token");
+          setShowLoginPrompt(true);
+        }
+        return;
+      }
+      
+      if (!response.ok) {
+        throw new Error(`HTTP error: ${response.status}`);
+      }
+      
+      const data = await response.json();
+      console.log("Packages data received:", data);
+      setPackages(data);
+      
+    } catch (err) {
+      console.error("Failed to load packages:", err);
+      setError(err instanceof Error ? err.message : "Failed to load packages");
+    } finally {
+      setLoading(prev => ({ ...prev, packages: false }));
+    }
+  }
+
+  async function fetchCustomers() {
+    const token = getToken();
+    if (!token) return;
+    
+    try {
+      setLoading(prev => ({ ...prev, customers: true }));
+      
+      console.log("Fetching customers...");
+      const response = await fetch("http://localhost:4000/customers", {
+        headers: { 
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json"
+        }
+      });
+      
+      console.log("Customers response status:", response.status);
+      
+      if (response.ok) {
+        const data = await response.json();
+        console.log("Customers data received:", data);
+        setCustomers(data);
+      } else {
+        console.error("Failed to fetch customers:", response.status);
+      }
+    } catch (err) {
+      console.error("Failed to load customers:", err);
+    } finally {
+      setLoading(prev => ({ ...prev, customers: false }));
+    }
+  }
+
+  async function fetchLocations() {
+    const token = getToken();
+    if (!token) return;
+    
+    try {
+      setLoading(prev => ({ ...prev, locations: true }));
+      
+      console.log("Fetching locations...");
+      const response = await fetch("http://localhost:4000/locations", {
+        headers: { 
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json"
+        }
+      });
+      
+      console.log("Locations response status:", response.status);
+      
+      if (response.ok) {
+        const data = await response.json();
+        console.log("Locations data received:", data);
+        setLocations(data);
+      } else {
+        console.error("Failed to fetch locations:", response.status);
+      }
+    } catch (err) {
+      console.error("Failed to load locations:", err);
+    } finally {
+      setLoading(prev => ({ ...prev, locations: false }));
+    }
+  }
+
+  async function fetchCenters() {
+    const token = getToken();
+    if (!token) return;
+
+    try {
+      setLoading(prev => ({ ...prev, centers: true }));
+
+      const response = await fetch("http://localhost:4000/locations/centers", {
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json"
+        }
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        setCenters(data);
+      } else {
+        console.error("Failed to fetch centers:", response.status);
+      }
+    } catch (err) {
+      console.error("Failed to load centers:", err);
+    } finally {
+      setLoading(prev => ({ ...prev, centers: false }));
+    }
+  }
+
+  // Form handlers
+  const handleCreatePackage = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const token = getToken();
+    if (!token) return;
+    
+    try {
+      setError(null);
+      
+      // Validate form data
+      if (!newPackage.weight || !newPackage.dimensions || !newPackage.senderId || 
+          !newPackage.receiverId || !newPackage.currentLocationId) {
+        setError("Please fill all required fields");
+        return;
+      }
+      
+      console.log("Creating package with data:", newPackage);
+      
+      const response = await fetch("http://localhost:4000/packages", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`
+        },
+      body: JSON.stringify({
+  weight: parseFloat(newPackage.weight),
+  dimensions: newPackage.dimensions,
+  senderId: parseInt(newPackage.senderId),
+  receiverId: parseInt(newPackage.receiverId),
+  currentLocationId: parseInt(newPackage.currentLocationId),
+  transportationId: newPackage.transportationId ? parseInt(newPackage.transportationId) : 3
+  // Send null instead of undefined or empty string
+})
+      });
+
+      console.log("Create package response status:", response.status);
+      
+      if (response.status === 401 || response.status === 403) {
+        const errorData = await response.json().catch(() => ({ error: "Permission denied" }));
+        alert(`❌ ${errorData.error || "You don't have permission to create packages"}`);
+        return;
+      }
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error("Create package error response:", errorText);
+        let errorMessage = "Failed to create package";
+        try {
+          const errorData = JSON.parse(errorText);
+          errorMessage = errorData.error || errorMessage;
+        } catch {}
+        throw new Error(errorMessage);
+      }
+
+      const createdPackage = await response.json();
+      console.log("Package created successfully:", createdPackage);
+      
+      // Add new package to state
+      setPackages(prev => [createdPackage, ...prev]);
+      
+      // Reset form
+      setNewPackage({
+        weight: "",
+        dimensions: "",
+        senderId: "",
+        receiverId: "",
+        currentLocationId: "",
+        transportationId: ""
+      });
+
+      // Switch to view tab
+      setActiveTab("VIEW_PACKAGES");
+      
+      alert(`✅ Package created successfully! ID: ${createdPackage.id}`);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Failed to create package";
+      setError(message);
+      alert(`❌ Error: ${message}`);
+    }
+  };
+
+  const handleUpdateStatus = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const token = getToken();
+    if (!token) return;
+    
+    try {
+      setError(null);
+      
+      if (!updateStatus.packageId || !updateStatus.locationId) {
+        setError("Please select a package and location");
+        return;
+      }
+      
+      console.log("Updating package status:", updateStatus);
+      
+      const response = await fetch(`http://localhost:4000/packages/${updateStatus.packageId}/track`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          status: updateStatus.status,
+          locationId: parseInt(updateStatus.locationId)
+        })
+      });
+
+      console.log("Update status response status:", response.status);
+      
+      if (response.status === 401 || response.status === 403) {
+        const errorData = await response.json().catch(() => ({ error: "Permission denied" }));
+        alert(`❌ ${errorData.error || "You don't have permission to update package status"}`);
+        return;
+      }
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error("Update status error response:", errorText);
+        let errorMessage = "Failed to update status";
+        try {
+          const errorData = JSON.parse(errorText);
+          errorMessage = errorData.error || errorMessage;
+        } catch {}
+        throw new Error(errorMessage);
+      }
+
+      const updatedPackage = await response.json();
+      console.log("Status updated successfully:", updatedPackage);
+      
+      // Update package in state
+      setPackages(prev => prev.map(pkg => 
+        pkg.id === updatedPackage.id ? updatedPackage : pkg
+      ));
+      
+      // Reset form
+      setUpdateStatus({
+        packageId: "",
+        status: "IN_TRANSIT",
+        locationId: ""
+      });
+
+      alert(`✅ Package ${updateStatus.packageId} status updated to ${updateStatus.status}`);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Failed to update status";
+      setError(message);
+      alert(`❌ Error: ${message}`);
+    }
+  };
+
+  const handleCreateLocation = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const token = getToken();
+    if (!token) return;
+
+    try {
+      setError(null);
+
+      if (!newLocation.name || !newLocation.address || !newLocation.city || !newLocation.centerId) {
+        setError("Please fill all required location fields, including center");
+        return;
+      }
+
+      setLocationActionLoading((prev) => ({ ...prev, create: true }));
+
+      const response = await fetch("http://localhost:4000/locations", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          name: newLocation.name,
+          address: newLocation.address,
+          city: newLocation.city,
+          centerId: parseInt(newLocation.centerId)
+        })
+      });
+
+      if (response.status === 401 || response.status === 403) {
+        const errorData = await response.json().catch(() => ({ error: "Permission denied" }));
+        alert(`??? ${errorData.error || "You don't have permission to create locations"}`);
+        return;
+      }
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        let errorMessage = "Failed to create location";
+        try {
+          const errorData = JSON.parse(errorText);
+          errorMessage = errorData.error || errorMessage;
+        } catch {}
+        throw new Error(errorMessage);
+      }
+
+      const createdLocation = await response.json();
+      setLocations((prev) =>
+        [...prev, createdLocation].sort((a, b) => a.name.localeCompare(b.name))
+      );
+
+      setNewLocation({
+        name: "",
+        address: "",
+        city: "",
+        centerId: ""
+      });
+
+      alert(`??? Location created successfully! ID: ${createdLocation.id}`);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Failed to create location";
+      setError(message);
+      alert(`??? Error: ${message}`);
+    } finally {
+      setLocationActionLoading((prev) => ({ ...prev, create: false }));
+    }
+  };
+
+  const handleCreateCenter = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const token = getToken();
+    if (!token) return;
+
+    try {
+      setError(null);
+
+      if (!newCenter.name || !newCenter.city || !newCenter.type) {
+        setError("Please fill all required center fields");
+        return;
+      }
+
+      setCenterActionLoading({ create: true });
+
+      const response = await fetch("http://localhost:4000/locations/centers", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          name: newCenter.name,
+          city: newCenter.city,
+          type: newCenter.type
+        })
+      });
+
+      if (response.status === 401 || response.status === 403) {
+        const errorData = await response.json().catch(() => ({ error: "Permission denied" }));
+        alert(`??? ${errorData.error || "You don't have permission to create centers"}`);
+        return;
+      }
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        let errorMessage = "Failed to create center";
+        try {
+          const errorData = JSON.parse(errorText);
+          errorMessage = errorData.error || errorMessage;
+        } catch {}
+        throw new Error(errorMessage);
+      }
+
+      const createdCenter = await response.json();
+      setCenters((prev) =>
+        [...prev, createdCenter].sort((a, b) => a.name.localeCompare(b.name))
+      );
+
+      setNewCenter({
+        name: "",
+        city: "",
+        type: ""
+      });
+
+      alert(`??? Center created successfully! ID: ${createdCenter.id}`);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Failed to create center";
+      setError(message);
+      alert(`??? Error: ${message}`);
+    } finally {
+      setCenterActionLoading({ create: false });
+    }
+  };
+
+  const handleDeleteLocation = async (location: Location) => {
+    const token = getToken();
+    if (!token) return;
+
+    const confirmed = window.confirm(
+      `Delete location "${location.name}"? This cannot be undone.`
+    );
+    if (!confirmed) return;
+
+    try {
+      setError(null);
+      setLocationActionLoading((prev) => ({ ...prev, deletingId: location.id }));
+
+      const response = await fetch(`http://localhost:4000/locations/${location.id}`, {
+        method: "DELETE",
+        headers: {
+          Authorization: `Bearer ${token}`
+        }
+      });
+
+      if (response.status === 401 || response.status === 403) {
+        const errorData = await response.json().catch(() => ({ error: "Permission denied" }));
+        alert(`??? ${errorData.error || "You don't have permission to delete locations"}`);
+        return;
+      }
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        let errorMessage = "Failed to delete location";
+        try {
+          const errorData = JSON.parse(errorText);
+          errorMessage = errorData.error || errorMessage;
+        } catch {}
+        throw new Error(errorMessage);
+      }
+
+      setLocations((prev) => prev.filter((loc) => loc.id !== location.id));
+      alert(`??? Location "${location.name}" deleted`);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Failed to delete location";
+      setError(message);
+      alert(`??? Error: ${message}`);
+    } finally {
+      setLocationActionLoading((prev) => ({ ...prev, deletingId: null }));
+    }
+  };
+
 
   // Tab definitions
   const tabs = [
-    { id: "CREATE_PACKAGE", name: "Create Package", permission: "CREATE_PACKAGE" },
-    { id: "UPDATE_PACKAGE_STATUS", name: "Update Status", permission: "UPDATE_PACKAGE_STATUS" },
-    { id: "VIEW_PACKAGES", name: "View Packages", permission: "VIEW_PACKAGES" },
-  ].filter(tab => user?.permissions?.includes(tab.permission));
+    { id: "CREATE_PACKAGE", name: "Create Package" },
+    { id: "UPDATE_PACKAGE_STATUS", name: "Update Status" },
+    { id: "VIEW_PACKAGES", name: "View Packages" },
+    { id: "MANAGE_LOCATIONS", name: "Locations" }
+  ];
 
-  // Form handlers
-  const handleCreatePackage = (e:any) => {
-    e.preventDefault();
-    const newPkg = {
-      id: packages.length + 1,
-      trackingNumber: newPackage.trackingNumber || `PKG-${Date.now()}`,
-      status: "CREATED",
-      sender: newPackage.sender,
-      receiver: newPackage.receiver,
-      weight: newPackage.weight,
-      dimensions: newPackage.dimensions,
-    };
-    setPackages([...packages, newPkg]);
-    alert(`Package created: ${newPkg.trackingNumber}`);
-    setNewPackage({ trackingNumber: "", sender: "", receiver: "", weight: "", dimensions: "", currentLocationId: 1 });
-  };
-
-  const handleUpdateStatus = (e:any) => {
-    e.preventDefault();
-    const updatedPackages = packages.map(pkg => 
-      pkg.id === parseInt(updateStatus.packageId) 
-        ? { ...pkg, status: updateStatus.status }
-        : pkg
+  // Login prompt
+  if (showLoginPrompt) {
+    return (
+      <LoginPrompt
+        onGoToLogin={() => router.push("/login")}
+        onClearSession={() => {
+          localStorage.removeItem("token");
+          router.refresh();
+        }}
+      />
     );
-    setPackages(updatedPackages);
-    alert(`Package ${updateStatus.packageId} status updated to ${updateStatus.status}`);
-    setUpdateStatus({ packageId: "", status: "IN_TRANSIT", locationId: 1 });
-  };
+  }
+
+  // Loading state
+  if (loading.packages && loading.customers && loading.locations && loading.centers) {
+    return (
+      <LoadingDashboard />
+    );
+  }
 
   return (
     <div className="min-h-screen bg-gray-50 p-4 md:p-6">
-      {/* Header */}
-      <div className="mb-6">
-        <h1 className="text-2xl md:text-3xl font-bold text-gray-800">Admin Dashboard</h1>
-        <p className="text-gray-600 mt-1">Manage packages and system operations</p>
-        <div className="mt-2 flex items-center space-x-2">
-          <span className="px-3 py-1 bg-purple-100 text-purple-800 text-sm font-medium rounded-full">
-            {user?.role}
-          </span>
-          <span className="text-sm text-gray-500">
-            Permissions: {user?.permissions?.join(", ")}
-          </span>
-        </div>
-      </div>
+      <AdminHeader user={user} onLogout={logout} />
 
-      {/* Tabs Navigation */}
-      <div className="mb-6">
-        <div className="border-b border-gray-200">
-          <nav className="-mb-px flex space-x-4 overflow-x-auto">
-            {tabs.map((tab) => (
-              <button
-                key={tab.id}
-                onClick={() => setActiveTab(tab.id)}
-                className={`
-                  whitespace-nowrap py-3 px-4 border-b-2 font-medium text-sm
-                  ${activeTab === tab.id
-                    ? "border-blue-500 text-blue-600"
-                    : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"
-                  }
-                `}
-              >
-                {tab.name}
-              </button>
-            ))}
-          </nav>
-        </div>
-      </div>
+      {error && (
+        <ErrorAlert error={error} onDismiss={() => setError(null)} />
+      )}
+
+      <TabsNav tabs={tabs} activeTab={activeTab} onTabChange={setActiveTab} />
 
       {/* Main Content */}
       <div className="bg-white rounded-xl shadow-sm border p-4 md:p-6">
         {/* CREATE_PACKAGE Form */}
-        {activeTab === "CREATE_PACKAGE" && user?.permissions?.includes("CREATE_PACKAGE") && (
-          <div>
-            <h2 className="text-xl font-semibold text-gray-800 mb-4">Create New Package</h2>
-            <form onSubmit={handleCreatePackage} className="space-y-4 max-w-2xl">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Tracking Number (Optional)
-                  </label>
-                  <input
-                    type="text"
-                    value={newPackage.trackingNumber}
-                    onChange={(e) => setNewPackage({...newPackage, trackingNumber: e.target.value})}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                    placeholder="Will auto-generate if empty"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Current Location ID
-                  </label>
-                  <select
-                    value={newPackage.currentLocationId}
-                    onChange={(e) => setNewPackage({...newPackage, currentLocationId: parseInt(e.target.value)})}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                  >
-                    <option value={1}>Warehouse 1</option>
-                    <option value={2}>Warehouse 2</option>
-                    <option value={3}>Distribution Center</option>
-                  </select>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Sender Name *
-                  </label>
-                  <input
-                    type="text"
-                    required
-                    value={newPackage.sender}
-                    onChange={(e) => setNewPackage({...newPackage, sender: e.target.value})}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                    placeholder="John Doe"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Receiver Name *
-                  </label>
-                  <input
-                    type="text"
-                    required
-                    value={newPackage.receiver}
-                    onChange={(e) => setNewPackage({...newPackage, receiver: e.target.value})}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                    placeholder="Jane Smith"
-                  />
-                </div>
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Weight (kg)
-                  </label>
-                  <input
-                    type="number"
-                    step="0.1"
-                    value={newPackage.weight}
-                    onChange={(e) => setNewPackage({...newPackage, weight: e.target.value})}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                    placeholder="2.5"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Dimensions (L×W×H cm)
-                  </label>
-                  <input
-                    type="text"
-                    value={newPackage.dimensions}
-                    onChange={(e) => setNewPackage({...newPackage, dimensions: e.target.value})}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                    placeholder="30×20×15"
-                  />
-                </div>
-              </div>
-
-              <div className="pt-4">
-                <button
-                  type="submit"
-                  className="px-6 py-3 bg-blue-600 text-white font-medium rounded-lg hover:bg-blue-700 focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
-                >
-                  Create Package
-                </button>
-              </div>
-            </form>
-          </div>
+        {activeTab === "CREATE_PACKAGE" && (
+          <CreatePackageForm
+            newPackage={newPackage}
+            onChange={handleNewPackageChange}
+            onSubmit={handleCreatePackage}
+            customers={customers}
+            locations={locations}
+            loading={loading}
+          />
         )}
 
         {/* UPDATE_PACKAGE_STATUS Form */}
-        {activeTab === "UPDATE_PACKAGE_STATUS" && user?.permissions?.includes("UPDATE_PACKAGE_STATUS") && (
-          <div>
-            <h2 className="text-xl font-semibold text-gray-800 mb-4">Update Package Status</h2>
-            <form onSubmit={handleUpdateStatus} className="space-y-4 max-w-2xl">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Select Package *
-                </label>
-                <select
-                  required
-                  value={updateStatus.packageId}
-                  onChange={(e) => setUpdateStatus({...updateStatus, packageId: e.target.value})}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                >
-                  <option value="">Select a package...</option>
-                  {packages.map((pkg) => (
-                    <option key={pkg.id} value={pkg.id}>
-                      {pkg.trackingNumber} - {pkg.sender} → {pkg.receiver} ({pkg.status})
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    New Status *
-                  </label>
-                  <select
-                    required
-                    value={updateStatus.status}
-                    onChange={(e) => setUpdateStatus({...updateStatus, status: e.target.value})}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                  >
-                    <option value="CREATED">Created</option>
-                    <option value="IN_TRANSIT">In Transit</option>
-                    <option value="DELIVERED">Delivered</option>
-                    <option value="CANCELLED">Cancelled</option>
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Location ID
-                  </label>
-                  <select
-                    value={updateStatus.locationId}
-                    onChange={(e) => setUpdateStatus({...updateStatus, locationId: parseInt(e.target.value)})}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                  >
-                    <option value={1}>Warehouse 1</option>
-                    <option value={2}>Warehouse 2</option>
-                    <option value={3}>Distribution Center</option>
-                    <option value={4}>Delivery Hub</option>
-                  </select>
-                </div>
-              </div>
-
-              {updateStatus.packageId && (
-                <div className="bg-blue-50 p-4 rounded-lg">
-                  <h3 className="font-medium text-blue-800">Current Status</h3>
-                  <p className="text-sm text-blue-600 mt-1">
-                    {packages.find(p => p.id === parseInt(updateStatus.packageId))?.status || "Unknown"}
-                  </p>
-                </div>
-              )}
-
-              <div className="pt-4">
-                <button
-                  type="submit"
-                  disabled={!updateStatus.packageId}
-                  className="px-6 py-3 bg-green-600 text-white font-medium rounded-lg hover:bg-green-700 focus:ring-2 focus:ring-green-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  Update Status
-                </button>
-              </div>
-            </form>
-          </div>
+        {activeTab === "UPDATE_PACKAGE_STATUS" && (
+          <UpdateStatusForm
+            updateStatus={updateStatus}
+            onChange={handleUpdateStatusChange}
+            onSubmit={handleUpdateStatus}
+            packages={packages}
+            locations={locations}
+            loading={loading}
+          />
         )}
 
         {/* VIEW_PACKAGES Table */}
-        {activeTab === "VIEW_PACKAGES" && user?.permissions?.includes("VIEW_PACKAGES") && (
-          <div>
-            <div className="flex justify-between items-center mb-4">
-              <h2 className="text-xl font-semibold text-gray-800">All Packages</h2>
-              <span className="text-sm text-gray-500">
-                Total: {packages.length} packages
-              </span>
-            </div>
-
-            <div className="overflow-x-auto">
-              <table className="min-w-full divide-y divide-gray-200">
-                <thead>
-                  <tr>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Tracking #
-                    </th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Sender → Receiver
-                    </th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Status
-                    </th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Actions
-                    </th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-200">
-                  {packages.map((pkg) => (
-                    <tr key={pkg.id} className="hover:bg-gray-50">
-                      <td className="px-4 py-3">
-                        <div className="font-medium text-gray-900">{pkg.trackingNumber}</div>
-                      </td>
-                      <td className="px-4 py-3">
-                        <div className="text-sm">
-                          <div className="font-medium">{pkg.sender}</div>
-                          <div className="text-gray-500">→ {pkg.receiver}</div>
-                        </div>
-                      </td>
-                      <td className="px-4 py-3">
-                        <span className={`
-                          px-2 py-1 text-xs font-medium rounded-full
-                          ${pkg.status === "DELIVERED" ? "bg-green-100 text-green-800" : 
-                            pkg.status === "IN_TRANSIT" ? "bg-blue-100 text-blue-800" : 
-                            pkg.status === "CANCELLED" ? "bg-red-100 text-red-800" : 
-                            "bg-gray-100 text-gray-800"}
-                        `}>
-                          {pkg.status.replace("_", " ")}
-                        </span>
-                      </td>
-                      <td className="px-4 py-3">
-                        <div className="flex space-x-2">
-                          {user?.permissions?.includes("UPDATE_PACKAGE_STATUS") && (
-                            <button
-                              onClick={() => {
-                                setUpdateStatus({
-                                  packageId: pkg.id.toString(),
-                                  status: pkg.status,
-                                  locationId: 1
-                                });
-                                setActiveTab("UPDATE_PACKAGE_STATUS");
-                              }}
-                              className="text-sm text-blue-600 hover:text-blue-800"
-                            >
-                              Update
-                            </button>
-                          )}
-                          <button className="text-sm text-gray-600 hover:text-gray-800">
-                            View Details
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-
-            {packages.length === 0 && (
-              <div className="text-center py-8">
-                <div className="text-gray-400 mb-2">No packages found</div>
-                {user?.permissions?.includes("CREATE_PACKAGE") && (
-                  <button
-                    onClick={() => setActiveTab("CREATE_PACKAGE")}
-                    className="text-blue-600 hover:text-blue-800 text-sm"
-                  >
-                    Create your first package →
-                  </button>
-                )}
-              </div>
-            )}
-          </div>
+        {activeTab === "VIEW_PACKAGES" && (
+          <PackagesTable
+            packages={packages}
+            loading={loading.packages}
+            onRefresh={fetchPackages}
+            onCreateFirst={() => setActiveTab("CREATE_PACKAGE")}
+            onSelectPackage={handleSelectPackage}
+          />
         )}
 
-        {/* No permission message */}
-        {!user?.permissions?.includes(activeTab) && (
-          <div className="text-center py-8">
-            <div className="w-12 h-12 mx-auto mb-4 rounded-full bg-red-100 flex items-center justify-center">
-              <span className="text-red-600 text-2xl">!</span>
-            </div>
-            <h3 className="text-lg font-medium text-gray-800 mb-2">Permission Required</h3>
-            <p className="text-gray-600">
-              You do not have the <span className="font-medium">{activeTab}</span> permission.
-            </p>
-          </div>
+        {activeTab === "MANAGE_LOCATIONS" && (
+          <ManageLocationsTab
+            locations={locations}
+            loading={loading.locations}
+            centers={centers}
+            centersLoading={loading.centers}
+            newLocation={newLocation}
+            newCenter={newCenter}
+            onChange={handleNewLocationChange}
+            onCenterChange={handleNewCenterChange}
+            onCreate={handleCreateLocation}
+            onCreateCenter={handleCreateCenter}
+            onDelete={handleDeleteLocation}
+            actionLoading={locationActionLoading}
+            centerActionLoading={centerActionLoading}
+          />
         )}
       </div>
 
-      {/* Quick Stats */}
-      <div className="mt-6 grid grid-cols-1 md:grid-cols-3 gap-4">
-        <div className="bg-white p-4 rounded-lg border shadow-sm">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm text-gray-500">Total Packages</p>
-              <p className="text-2xl font-bold mt-1">{packages.length}</p>
-            </div>
-            <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center">
-              <span className="text-blue-600">📦</span>
-            </div>
-          </div>
-        </div>
-
-        <div className="bg-white p-4 rounded-lg border shadow-sm">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm text-gray-500">In Transit</p>
-              <p className="text-2xl font-bold mt-1 text-orange-600">
-                {packages.filter(p => p.status === "IN_TRANSIT").length}
-              </p>
-            </div>
-            <div className="w-10 h-10 bg-orange-100 rounded-lg flex items-center justify-center">
-              <span className="text-orange-600">🚚</span>
-            </div>
-          </div>
-        </div>
-
-        <div className="bg-white p-4 rounded-lg border shadow-sm">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm text-gray-500">Delivered</p>
-              <p className="text-2xl font-bold mt-1 text-green-600">
-                {packages.filter(p => p.status === "DELIVERED").length}
-              </p>
-            </div>
-            <div className="w-10 h-10 bg-green-100 rounded-lg flex items-center justify-center">
-              <span className="text-green-600">✓</span>
-            </div>
-          </div>
-        </div>
-      </div>
+      <QuickStats packages={packages} />
+      <DebugInfo packages={packages} customers={customers} locations={locations} user={user} />
     </div>
   );
 }
