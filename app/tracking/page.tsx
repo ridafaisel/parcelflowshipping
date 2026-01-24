@@ -1,8 +1,10 @@
 "use client";
 
 import { useState } from "react";
+import { getApiBaseUrl } from "../lib/api";
 
 export default function TrackingPage() {
+  const API_BASE_URL = getApiBaseUrl();
   const [number, setNumber] = useState("");
   const [info, setInfo] = useState<any | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -13,7 +15,7 @@ export default function TrackingPage() {
     setInfo(null);
 
     try {
-      const res = await fetch(`http://localhost:4000/tracking?number=${encodeURIComponent(number)}`);
+      const res = await fetch(`${API_BASE_URL}/tracking?number=${encodeURIComponent(number)}`);
       if (!res.ok) {
         setError("Tracking lookup failed");
         return;

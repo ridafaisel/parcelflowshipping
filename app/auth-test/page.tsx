@@ -1,8 +1,10 @@
 "use client";
 
 import { useState } from "react";
+import { getApiBaseUrl } from "../lib/api";
 
 export default function AuthTestPage() {
+  const API_BASE_URL = getApiBaseUrl();
   const [result, setResult] = useState("");
 
   async function testAuth() {
@@ -14,7 +16,7 @@ export default function AuthTestPage() {
     }
 
     try {
-      const res = await fetch("http://localhost:4000/packages", {
+      const res = await fetch(`${API_BASE_URL}/packages`, {
         headers: {
           Authorization: `Bearer ${token}`,
         },

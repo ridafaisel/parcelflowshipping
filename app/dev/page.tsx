@@ -1,18 +1,20 @@
 "use client";
 
 import { useState } from "react";
+import { getApiBaseUrl } from "../lib/api";
 
 export default function DevPage() {
+  const API_BASE_URL = getApiBaseUrl();
   const [result, setResult] = useState<any>(null);
 
   const ping = async () => {
-    const res = await fetch("http://localhost:4000/test/ping");
+    const res = await fetch(`${API_BASE_URL}/test/ping`);
     setResult(await res.json());
   };
 
   // test creating a package
   const createPackage = async () => {
-  const res = await fetch("http://localhost:4000/packages", {
+  const res = await fetch(`${API_BASE_URL}/packages`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
@@ -32,7 +34,7 @@ export default function DevPage() {
 
 
 const updateStatus = async () => {
- const res = await fetch("http://localhost:4000/status/2", {
+ const res = await fetch(`${API_BASE_URL}/status/2`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({

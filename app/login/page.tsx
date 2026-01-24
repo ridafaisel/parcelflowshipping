@@ -3,7 +3,9 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "../context/AuthContext";
+import { getApiBaseUrl } from "../lib/api";
 export default function LoginPage() {
+  const API_BASE_URL = getApiBaseUrl();
   const router = useRouter();
   const { login, user } = useAuth();
 
@@ -16,7 +18,7 @@ export default function LoginPage() {
     setError("");
 
     try {
-      const res = await fetch("http://localhost:4000/auth/login", {
+      const res = await fetch(`${API_BASE_URL}/auth/login`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",

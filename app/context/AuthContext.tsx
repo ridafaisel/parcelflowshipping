@@ -1,6 +1,7 @@
 "use client";
 
 import { createContext, useContext, useEffect, useState } from "react";
+import { getApiBaseUrl } from "../lib/api";
 
 type User = Record<string, any> | null;
 
@@ -15,6 +16,7 @@ type AuthContextType = {
 };
 
 const AuthContext = createContext<AuthContextType | null>(null);
+const API_BASE_URL = getApiBaseUrl();
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User>(null);
@@ -29,7 +31,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
 
     try {
-      const res = await fetch("http://localhost:4000/auth/me", {
+      const res = await fetch(`${API_BASE_URL}/auth/me`, {
         headers: {
           Authorization: `Bearer ${token}`,
         },
@@ -65,7 +67,7 @@ async function checkPermission(permission: string) {
   try {
     // Use GET with query parameters instead of body
     const res = await fetch(
-      `http://localhost:4000/auth/check-permission?permission=${encodeURIComponent(permission)}`,
+      `${API_BASE_URL}/auth/check-permission?permission=${encodeURIComponent(permission)}`,
       {
         headers: {
           Authorization: `Bearer ${token}`,

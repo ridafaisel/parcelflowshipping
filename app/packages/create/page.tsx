@@ -2,8 +2,10 @@
 
 import RequireAuth from "../../components/RequireAuth";
 import { useState } from "react";
+import { getApiBaseUrl } from "../../lib/api";
 
 export default function CreatePackagePage() {
+  const API_BASE_URL = getApiBaseUrl();
   const [trackingNumber, setTrackingNumber] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
@@ -15,7 +17,7 @@ export default function CreatePackagePage() {
 
     try {
       const token = localStorage.getItem("token");
-      const res = await fetch("http://localhost:4000/packages", {
+      const res = await fetch(`${API_BASE_URL}/packages`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",

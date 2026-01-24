@@ -2,6 +2,7 @@
 
 import RequireAuth from "../components/RequireAuth";
 import { useEffect, useState } from "react";
+import { getApiBaseUrl } from "../lib/api";
 
 interface Customer {
   id: number;
@@ -54,6 +55,7 @@ interface Package {
 }
 
 export default function PackagesPage() {
+  const API_BASE_URL = getApiBaseUrl();
   const [packages, setPackages] = useState<Package[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -65,7 +67,7 @@ export default function PackagesPage() {
       try {
         setLoading(true);
         const token = localStorage.getItem("token");
-        const res = await fetch("http://localhost:4000/packages", {
+        const res = await fetch(`${API_BASE_URL}/packages`, {
           headers: token ? { Authorization: `Bearer ${token}` } : {},
         });
         

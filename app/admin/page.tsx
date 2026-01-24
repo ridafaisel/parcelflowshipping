@@ -15,8 +15,10 @@ import QuickStats from "../components/admin/QuickStats";
 import DebugInfo from "../components/admin/DebugInfo";
 import ManageLocationsTab from "../components/admin/ManageLocationsTab";
 import { Center, Customer, Location, Package } from "../components/admin/types";
+import { getApiBaseUrl } from "../lib/api";
 
 export default function AdminDashboard() {
+  const API_BASE_URL = getApiBaseUrl();
   const { user, logout } = useAuth();
   const router = useRouter();
   const [activeTab, setActiveTab] = useState("VIEW_PACKAGES");
@@ -156,7 +158,7 @@ export default function AdminDashboard() {
       setError(null);
       
       console.log("Fetching packages...");
-      const response = await fetch("http://localhost:4000/packages", {
+      const response = await fetch(`${API_BASE_URL}/packages`, {
         headers: { 
           Authorization: `Bearer ${token}`,
           "Content-Type": "application/json"
@@ -201,7 +203,7 @@ export default function AdminDashboard() {
       setLoading(prev => ({ ...prev, customers: true }));
       
       console.log("Fetching customers...");
-      const response = await fetch("http://localhost:4000/customers", {
+      const response = await fetch(`${API_BASE_URL}/customers`, {
         headers: { 
           Authorization: `Bearer ${token}`,
           "Content-Type": "application/json"
@@ -232,7 +234,7 @@ export default function AdminDashboard() {
       setLoading(prev => ({ ...prev, locations: true }));
       
       console.log("Fetching locations...");
-      const response = await fetch("http://localhost:4000/locations", {
+      const response = await fetch(`${API_BASE_URL}/locations`, {
         headers: { 
           Authorization: `Bearer ${token}`,
           "Content-Type": "application/json"
@@ -262,7 +264,7 @@ export default function AdminDashboard() {
     try {
       setLoading(prev => ({ ...prev, centers: true }));
 
-      const response = await fetch("http://localhost:4000/locations/centers", {
+      const response = await fetch(`${API_BASE_URL}/locations/centers`, {
         headers: {
           Authorization: `Bearer ${token}`,
           "Content-Type": "application/json"
@@ -300,7 +302,7 @@ export default function AdminDashboard() {
       
       console.log("Creating package with data:", newPackage);
       
-      const response = await fetch("http://localhost:4000/packages", {
+      const response = await fetch(`${API_BASE_URL}/packages`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -378,7 +380,7 @@ export default function AdminDashboard() {
       
       console.log("Updating package status:", updateStatus);
       
-      const response = await fetch(`http://localhost:4000/packages/${updateStatus.packageId}/track`, {
+      const response = await fetch(`${API_BASE_URL}/packages/${updateStatus.packageId}/track`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -447,7 +449,7 @@ export default function AdminDashboard() {
 
       setLocationActionLoading((prev) => ({ ...prev, create: true }));
 
-      const response = await fetch("http://localhost:4000/locations", {
+      const response = await fetch(`${API_BASE_URL}/locations`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -514,7 +516,7 @@ export default function AdminDashboard() {
 
       setCenterActionLoading({ create: true });
 
-      const response = await fetch("http://localhost:4000/locations/centers", {
+      const response = await fetch(`${API_BASE_URL}/locations/centers`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -577,7 +579,7 @@ export default function AdminDashboard() {
       setError(null);
       setLocationActionLoading((prev) => ({ ...prev, deletingId: location.id }));
 
-      const response = await fetch(`http://localhost:4000/locations/${location.id}`, {
+      const response = await fetch(`${API_BASE_URL}/locations/${location.id}`, {
         method: "DELETE",
         headers: {
           Authorization: `Bearer ${token}`
