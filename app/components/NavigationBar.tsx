@@ -4,10 +4,12 @@
 import Link from "next/link";
 import { useAuth } from "../context/AuthContext";
 import { usePathname } from "next/navigation";
+import { useState } from "react";
 
 export default function NavigationBar() {
   const { user, logout, loading } = useAuth();
   const pathname = usePathname();
+  const [mobileOpen, setMobileOpen] = useState(false);
 
   const isActive = (path: string) => pathname === path;
 
@@ -97,20 +99,37 @@ export default function NavigationBar() {
           </div>
 
           {/* Mobile menu button */}
-          <button className="md:hidden p-2 rounded-md text-gray-700 hover:text-gray-900 hover:bg-gray-100">
-            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
-            </svg>
+          <button
+            type="button"
+            aria-expanded={mobileOpen}
+            aria-controls="mobile-nav"
+            aria-label="Toggle navigation menu"
+            onClick={() => setMobileOpen((open) => !open)}
+            className="md:hidden p-2 rounded-md text-gray-700 hover:text-gray-900 hover:bg-gray-100"
+          >
+            {mobileOpen ? (
+              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            ) : (
+              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
+              </svg>
+            )}
           </button>
         </div>
 
         {/* Mobile menu */}
-        <div className="md:hidden border-t mt-2 pt-2 hidden">
+        <div
+          id="mobile-nav"
+          className={`md:hidden border-t mt-2 pt-2 ${mobileOpen ? "block" : "hidden"}`}
+        >
           <div className="space-y-1 pb-3">
             {navItems.map((item) => (
               <Link
                 key={item.path}
                 href={item.path}
+                onClick={() => setMobileOpen(false)}
                 className={`block px-3 py-2 rounded-md text-base font-medium ${
                   isActive(item.path)
                     ? "bg-blue-50 text-blue-600"
