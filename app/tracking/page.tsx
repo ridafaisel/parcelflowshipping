@@ -204,7 +204,7 @@ export default function TrackingPage() {
                 <p className="text-sm text-gray-500">Transportation</p>
                 <p className="text-sm font-medium mt-1 text-gray-900">{details.transportation?.type}</p>
                 <p className="text-xs text-gray-500">
-                  {details.transportation?.fromLocation?.city} -> {details.transportation?.toLocation?.city}
+                  {details.transportation?.fromLocation?.city} {"->"} {details.transportation?.toLocation?.city}
                 </p>
                 <p className="text-xs text-gray-400">Dep {formatDateTime(details.transportation?.departureTime)}</p>
               </div>
